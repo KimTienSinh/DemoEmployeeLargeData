@@ -28,42 +28,48 @@ namespace DemoEmployee.Controllers
 
 
         [HttpPost]
-        public async Task<IActionResult> AddEmployees()
+        public async Task<IActionResult> AddEmployees(IFormFile file)
         {
-            var filePath = "C:/Users/ADMIN/Downloads/EmployeeData.xlsx";
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("File is empty");
+            }
 
             using (var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
             {
                 try
-                {                    
-                    using (var package = new ExcelPackage(new FileInfo(filePath)))
+                {
+                    using (var stream = new MemoryStream())
                     {
-                        var worksheet = package.Workbook.Worksheets[0];
-                        var rowCount = worksheet.Dimension.Rows;
-
-                        var employees = new List<Employee>();
-
-                        for (int row = 2; row <= rowCount; row++)
+                        await file.CopyToAsync(stream);
+                        using (var package = new ExcelPackage(stream))
                         {
-                            var employee = new Employee
+                            var worksheet = package.Workbook.Worksheets[0];
+                            var rowCount = worksheet.Dimension.Rows;
+
+                            var employees = new List<Employee>();
+
+                            for (int row = 2; row <= rowCount; row++)
                             {
-                                MaNV = worksheet.Cells[row, 1].Value.ToString(),
-                                TenNV = worksheet.Cells[row, 2].Value.ToString(),
-                                NgaySinh = DateTime.ParseExact(
+                                var employee = new Employee
+                                {
+                                    MaNV = worksheet.Cells[row, 1].Value.ToString(),
+                                    TenNV = worksheet.Cells[row, 2].Value.ToString(),
+                                    NgaySinh = DateTime.ParseExact(
                                         worksheet.Cells[row, 3].Value.ToString(),
                                         "M/d/yyyy",
                                         CultureInfo.InvariantCulture
                                     ),
-                            };
+                                };
 
-                            employees.Add(employee);
+                                employees.Add(employee);
+                            }
+
+                            await _context.BulkInsertAsync(employees);
                         }
-
-                        await _context.BulkInsertAsync(employees);
                     }
-
                     scope.Complete();
-                    return Ok("Successfully" );
+                    return Ok("Successfully");
                 }
                 catch (Exception ex)
                 {
